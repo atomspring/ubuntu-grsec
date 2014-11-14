@@ -135,6 +135,7 @@ correct options.
  * Select *Exit*
  * Select *Yes* to save
 
+### Performance Boost
 You will likely want to boost performance on your kernel a little, besides discluding some packages you don't need (like support for AMD processors if you're on an Intel board).
 ```
 make menuconfig
