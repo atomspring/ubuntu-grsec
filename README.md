@@ -48,6 +48,7 @@ Create a directory for Grsecurity, the Linux kernel, and the other tools
 you will be downloading.
 
 ```
+cd /usr/src
 mkdir grsec
 cd grsec/
 ```
@@ -126,28 +127,40 @@ correct options.
    * Navigate to *Grsecurity*
      * Press *Y* to include it
      * Set *Configuration Method* to *Automatic*
-     * Set *Usage Type* to *Server* (default)
-     * Set *Virtualization Type* to *None* (default) 
-     * Set *Required Priorities* to *Security*
+     * Set *Usage Type* to *Server* or *Desktop*
+     * Set *Virtualization Type* to *KVM* (if you virtualize)
+     * Set *Required Priorities* to *Security* or *Performance*
      * Select *Exit*
    * Select *Exit* 
  * Select *Exit*
  * Select *Yes* to save
 
+You will likely want to boost performance on your kernel a little, besides discluding some packages you don't need (like support for AMD processors if you're on an Intel board).
+```
+make menuconfig
+```
+* Navigate to *Processor type and features*
+  * Processor Family
+   * Select your CPU
+  * Deselect stuff like "goldfish", AMD etc
+  * For better response on a desktop, select *Preemption model*
+   * Select *Preemptible kernel* (Servers should stick with *No forced preemption*)
+* Save it and get out of there 
+
 ### Compile the kernel with Grsecurity
 
-Use all available cores when compiling the kernel.
-
-
+Use all available cores when compiling the kernel, optimize compilation for local chipset (or any very similar).
 ```
 export CONCURRENCY_LEVEL="$(grep -c '^processor' /proc/cpuinfo)"
+export KCFLAGS="-march=native -O2 -pipe" KCPPFLAGS="-march=native -O2 -pipe"
 ```
+
 
 Compile the kernel with the Ubuntu overlay. Note that this step may fail
 if you are using a small VPS/virtual machine.
 
 ```
-time make-kpkg clean
+make-kpkg clean
 ```
 If you want to create a tiny kernel with support for only the hardware you currently have plugged in, run
 ```
@@ -166,55 +179,44 @@ linux-headers-3.17.2-grsec_3.17.2-grsec-10.00.Custom_amd64.deb
 linux-image-3.17.2-grsec_3.17.2-grsec-10.00.Custom_amd64.deb
 ```
 
-## Set up PaX on App and Monitor servers
+## !!Sugested!! Set up PaX on Desktops(!) and servers
 
-Proceed with the following steps only if the SecureDrop App and Monitor
-servers are up and running.
+PaX is the memory-attack blocker, included in Grsecurity. At this point as a desktop user, you'll be setting relaxations of security on many programs which use methods that attackers also use, which gets to be a real pain in the butt. I'd suggest you look into the linux-pax-flags directory on this github for a system which automatically updates PaX flags on a lot of commonly used desktop software.
 
-Both servers need to have PaX installed and configured. PaX is part of
-common security-enhancing kernel patches and secure distributions, such
-as Grsecurity.
+For a desktop, I'd suggest running the following (note that this app will run automatically after any APT operation, look in /etc/apt/apt.conf.d/99-grsec)
+```
+git clone https:///github/atomspring/linux-pax-flags
+cd linux-pax-flags
+./install.sh
+linux-pax-flags.sh
+```
 
+If you don't want to automatically keep PaX flags updated, run the basics (e.g. for a server)
 ```
 sudo apt-get install paxctl
-sudo paxctl -Cpm /usr/sbin/grub-probe  
+sudo paxctl -Cpm /usr/sbin/grub-probe
 sudo paxctl -Cpm /usr/sbin/grub-mkdevicemap  
 sudo paxctl -Cpm /usr/sbin/grub-setup  
 sudo paxctl -Cpm /usr/bin/grub-script-check  
 sudo paxctl -Cpm /usr/bin/grub-mount  
 ```
 
-### Install new kernel on both App and Monitor servers
-
-Install the new kernel with Grsecurity on both servers.
+### Install the new kernel with Grsecurity on both servers.
 
 ```
 sudo dpkg -i *.deb
 sudo update-grub
 ```
 
-### Disable conflicting jail restrictions on the App server
+### Configure the system to use the grsec kernel by default
 
-The following commands disable conflicting jail restrictions and should
-**only** be run on the App server.
-
-```
-sudo echo "kernel.grsecurity.chroot.caps = 0" >> /etc/sysctl.conf
-sudo echo "kernel.grsecurity.chroot.deny.unix = 0" >> /etc/sysctl.conf
-sudo sysctl -p /etc/sysctl.conf
-```
-
-### Configure App and Monitor servers to use new kernel by default
-
-Set the new kernel to be the default on both servers. Start by finding
-the exact menuentry name for the kernel.
+Start by finding the exact menuentry name for the kernel.
 
 ```
 grep menuentry /boot/grub/grub
 ```
 
-Copy the output and use it in the *sed* command below to set this kernel
-as the default.
+Copy the output and use it in the *sed* command below to set this kernel as the default.
 
 ```
 sudo sed -i "s/^GRUB_DEFAULT=.*$/GRUB_DEFAULT=2>Ubuntu, with Linux 3.17.2-grsec/" /etc/default/grub
